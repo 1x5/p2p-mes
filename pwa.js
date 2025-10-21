@@ -403,14 +403,27 @@ function updateBadge(count) {
 // Сброс счетчика при фокусе на приложении и переподключение
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) {
+    console.log('[PWA] Приложение стало активным');
     unreadCount = 0;
     updateBadge(0);
     
     // Переподключаемся если потеряли соединение
     if (!ws || ws.readyState !== WebSocket.OPEN) {
-      console.log('[PWA] Приложение активно, переподключаемся...');
+      console.log('[PWA] WebSocket не подключен, переподключаемся...');
       connectWebSocket();
+    } else {
+      console.log('[PWA] WebSocket уже подключен');
+      // Проверяем P2P соединение
+      if (!dataChannel || dataChannel.readyState !== 'open') {
+        console.log('[PWA] P2P не активен, запрашиваем переподключение...');
+        // Запрашиваем обновление статуса с сервера
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'ping' }));
+        }
+      }
     }
+  } else {
+    console.log('[PWA] Приложение ушло в фон');
   }
 });
 

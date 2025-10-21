@@ -37,7 +37,8 @@
     ],
     "mac": {
       "category": "public.app-category.social-networking",
-      "target": "dmg"
+      "target": "dmg",
+      "icon": null
     },
     "dmg": {
       "title": "p2p-mas"
