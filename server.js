@@ -9,7 +9,8 @@ const wss = new WebSocket.Server({ server });
 const PORT = process.env.PORT || 3000;
 const MAX_CLIENTS = 2;
 
-let clients = new Set();
+let clients = new Map(); // Map вместо Set для сохранения ID
+let nextClientId = 1; // Счетчик для уникальных ID
 
 wss.on('connection', (ws) => {
   console.log('Новое подключение');
@@ -24,9 +25,16 @@ wss.on('connection', (ws) => {
     return;
   }
 
-  // Назначаем ID: первый = 1, второй = 2
-  ws.clientId = clients.size + 1;
-  clients.add(ws);
+  // Находим свободный ID (1 или 2)
+  let clientId;
+  if (!clients.has(1)) {
+    clientId = 1;
+  } else if (!clients.has(2)) {
+    clientId = 2;
+  }
+  
+  ws.clientId = clientId;
+  clients.set(clientId, ws);
   
   // Отправляем клиенту его ID
   ws.send(JSON.stringify({
@@ -43,8 +51,8 @@ wss.on('connection', (ws) => {
       console.log('Получено:', data.type);
 
       // Пересылка сигналов WebRTC другому клиенту
-      clients.forEach((client) => {
-        if (client !== ws && client.readyState === WebSocket.OPEN) {
+      clients.forEach((client, id) => {
+        if (id !== ws.clientId && client.readyState === WebSocket.OPEN) {
           client.send(message);
         }
       });
@@ -55,13 +63,13 @@ wss.on('connection', (ws) => {
 
   ws.on('close', () => {
     console.log('Клиент отключился');
-    clients.delete(ws);
+    clients.delete(ws.clientId);
     broadcastStatus();
   });
 
   ws.on('error', (error) => {
     console.error('WebSocket ошибка:', error);
-    clients.delete(ws);
+    clients.delete(ws.clientId);
     broadcastStatus();
   });
 });
@@ -70,13 +78,13 @@ wss.on('connection', (ws) => {
 function broadcastStatus() {
   const online = clients.size === MAX_CLIENTS;
   
-  clients.forEach((client) => {
+  clients.forEach((client, clientId) => {
     if (client.readyState === WebSocket.OPEN) {
       const status = {
         type: 'status',
         online: online,
         count: clients.size,
-        shouldInitiate: client.clientId === 1 && online // Только первый клиент инициирует
+        shouldInitiate: clientId === 1 && online // Только первый клиент инициирует
       };
       client.send(JSON.stringify(status));
     }
