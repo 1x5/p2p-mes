@@ -1,129 +1,131 @@
-// Background service worker - управляет offscreen document для WebRTC
+// Background service worker - WebSocket сигналинг и хранение сообщений
 
-const WS_URL = 'ws://localhost:3000'; // Для production замени на wss://твой-домен.com
+const WS_URL = 'ws://localhost:3000';
 
-let isOnline = false;
-let channelOpen = false;
+let ws = null;
 let clientId = null;
+let isOnline = false;
+let unreadMessages = [];
+let popupPort = null;
 
-// Создание offscreen document
-async function setupOffscreenDocument() {
-  try {
-    const existingContexts = await chrome.runtime.getContexts({
-      contextTypes: ['OFFSCREEN_DOCUMENT'],
-      documentUrls: [chrome.runtime.getURL('offscreen.html')]
-    });
+// Подключение WebSocket
+connectWebSocket();
 
-    if (existingContexts.length > 0) {
-      console.log('[Background] Offscreen document уже существует');
+function connectWebSocket() {
+  ws = new WebSocket(WS_URL);
+
+  ws.onopen = () => {
+    console.log('[Background] WebSocket подключен');
+    notifyPopup({ type: 'ws-connected' });
+  };
+
+  ws.onmessage = async (event) => {
+    let data;
+    try {
+      if (event.data instanceof Blob) {
+        data = JSON.parse(await event.data.text());
+      } else {
+        data = JSON.parse(event.data);
+      }
+    } catch (error) {
+      console.error('[Background] Ошибка парсинга:', error);
       return;
     }
 
-    await chrome.offscreen.createDocument({
-      url: 'offscreen.html',
-      reasons: ['WEB_RTC'],
-      justification: 'WebRTC P2P соединение для мессенджера'
-    });
+    console.log('[Background] Получено:', data.type, data);
 
-    console.log('[Background] Offscreen document создан');
-    
-    // Подключаем WebSocket через offscreen
-    setTimeout(() => {
-      chrome.runtime.sendMessage({ 
-        type: 'ws-connect', 
-        url: WS_URL 
-      }).catch(err => console.log('[Background] Offscreen еще не готов:', err.message));
-    }, 200);
-  } catch (error) {
-    console.error('[Background] Ошибка создания offscreen:', error);
-  }
+    switch (data.type) {
+      case 'init':
+        clientId = data.clientId;
+        console.log('[Background] Мой ID:', clientId);
+        notifyPopup({ type: 'init', clientId: data.clientId });
+        break;
+
+      case 'status':
+        isOnline = data.count === 2;
+        console.log('[Background] Статус:', { online: isOnline, shouldInitiate: data.shouldInitiate });
+        updateBadge(isOnline);
+        notifyPopup({ type: 'status', online: isOnline, shouldInitiate: data.shouldInitiate });
+        break;
+
+      case 'offer':
+      case 'answer':
+      case 'ice-candidate':
+        // Пересылаем WebRTC сигналы в popup
+        notifyPopup({ type: 'webrtc-signal', signal: data });
+        break;
+    }
+  };
+
+  ws.onerror = (error) => {
+    console.error('[Background] WebSocket ошибка:', error);
+  };
+
+  ws.onclose = () => {
+    console.log('[Background] WebSocket закрыт, переподключение...');
+    isOnline = false;
+    updateBadge(false);
+    notifyPopup({ type: 'ws-disconnected' });
+    setTimeout(connectWebSocket, 3000);
+  };
 }
 
-// Создание offscreen document при установке
-chrome.runtime.onInstalled.addListener(async () => {
-  await setupOffscreenDocument();
-  updateBadge(false);
+// Слушаем long-lived connection от popup
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name === 'popup') {
+    console.log('[Background] Popup подключился');
+    popupPort = port;
+
+    // Отправляем текущий статус
+    port.postMessage({ 
+      type: 'init-state', 
+      online: isOnline,
+      clientId: clientId,
+      unreadMessages: unreadMessages
+    });
+
+    // Очищаем непрочитанные при открытии popup
+    unreadMessages = [];
+    updateBadgeCount(0);
+
+    port.onMessage.addListener((message) => {
+      console.log('[Background] Сообщение от popup:', message.type);
+
+      switch (message.type) {
+        case 'ws-send':
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify(message.data));
+          }
+          break;
+
+        case 'new-message':
+          // Popup отправил сообщение - сохраняем для истории
+          break;
+
+        case 'message-received':
+          // Popup получил сообщение через WebRTC
+          break;
+      }
+    });
+
+    port.onDisconnect.addListener(() => {
+      console.log('[Background] Popup отключился');
+      popupPort = null;
+    });
+  }
 });
 
-// Создание offscreen document при старте
-chrome.runtime.onStartup.addListener(async () => {
-  await setupOffscreenDocument();
-});
-
-// Слушаем сообщения от offscreen и popup
+// Слушаем обычные сообщения (для совместимости)
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log('[Background] Получено:', message.type, 'от', sender.url ? 'offscreen' : 'popup');
+  console.log('[Background] Получено сообщение:', message.type);
 
   switch (message.type) {
-    case 'ws-open':
-      console.log('[Background] WebSocket подключен');
-      notifyPopup({ type: 'connection', status: 'connected' });
-      break;
-
-    case 'ws-close':
-      console.log('[Background] WebSocket отключен');
-      isOnline = false;
-      channelOpen = false;
-      updateBadge(false);
-      notifyPopup({ type: 'connection', status: 'disconnected' });
-      break;
-
-    case 'init':
-      clientId = message.clientId;
-      console.log('[Background] Мой ID:', clientId);
-      break;
-
-    case 'status':
-      isOnline = message.online;
-      console.log('[Background] Статус изменился:', { 
-        online: isOnline, 
-        shouldInitiate: message.shouldInitiate,
-        clientId: message.clientId 
-      });
-      updateBadge(isOnline);
-      notifyPopup({ type: 'status', online: isOnline, count: message.count });
-      break;
-
-    case 'channel-open':
-      channelOpen = true;
-      console.log('[Background] Data channel открыт');
-      notifyPopup({ type: 'channel', status: 'open' });
-      break;
-
-    case 'channel-close':
-      channelOpen = false;
-      console.log('[Background] Data channel закрыт');
-      notifyPopup({ type: 'channel', status: 'closed' });
-      break;
-
-    case 'message':
-      console.log('[Background] Получено сообщение:', message.data);
-      notifyPopup({ type: 'message', data: message.data });
-      break;
-
     case 'getStatus':
-      console.log('[Background] Запрос статуса от popup');
       sendResponse({ 
         online: isOnline, 
-        channelOpen: channelOpen 
+        clientId: clientId,
+        unreadMessages: unreadMessages
       });
-      break;
-
-    case 'sendMessage':
-      console.log('[Background] Отправка сообщения через offscreen');
-      chrome.runtime.sendMessage({ 
-        type: 'send-message', 
-        data: message.data 
-      }).then(response => {
-        sendResponse(response);
-      }).catch(err => {
-        sendResponse({ success: false, error: err.message });
-      });
-      return true; // Асинхронный ответ
-
-    case 'keepalive':
-      // Offscreen document шлет keepalive чтобы оставаться активным
-      sendResponse({ alive: true });
       break;
   }
 
@@ -132,9 +134,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 // Отправка сообщения в popup
 function notifyPopup(message) {
-  chrome.runtime.sendMessage(message).catch(() => {
-    // Popup может быть закрыт, это нормально
-  });
+  if (popupPort) {
+    try {
+      popupPort.postMessage(message);
+    } catch (err) {
+      console.log('[Background] Popup недоступен:', err.message);
+      popupPort = null;
+    }
+  }
 }
 
 // Обновление badge
@@ -143,5 +150,21 @@ function updateBadge(online) {
   chrome.action.setBadgeBackgroundColor({ color });
   chrome.action.setBadgeText({ text: '●' });
 }
+
+// Обновление счетчика непрочитанных
+function updateBadgeCount(count) {
+  if (count > 0) {
+    chrome.action.setBadgeBackgroundColor({ color: '#ef4444' });
+    chrome.action.setBadgeText({ text: count.toString() });
+  } else if (isOnline) {
+    chrome.action.setBadgeBackgroundColor({ color: '#10b981' });
+    chrome.action.setBadgeText({ text: '●' });
+  }
+}
+
+// Инициализация
+chrome.runtime.onInstalled.addListener(() => {
+  updateBadge(false);
+});
 
 console.log('[Background] Service Worker загружен');

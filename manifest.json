@@ -4,8 +4,7 @@
   "version": "1.0.0",
   "description": "Минималистичный P2P мессенджер для двоих",
   "permissions": [
-    "storage",
-    "offscreen"
+    "storage"
   ],
   "action": {
     "default_popup": "popup.html",
