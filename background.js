@@ -52,16 +52,12 @@ function connectWebSocket() {
         break;
 
       case 'status':
-        isOnline = data.online && data.count === 2;
+        const wasOnline = isOnline;
+        isOnline = data.count === 2;
+        console.log('Статус изменился:', { wasOnline, isOnline, shouldInitiate: data.shouldInitiate, hasPC: !!pc, clientId });
+        
         updateBadge(isOnline);
         notifyPopup({ type: 'status', online: isOnline, count: data.count });
-        
-        console.log('Status received:', { 
-          shouldInitiate: data.shouldInitiate, 
-          hasPC: !!pc, 
-          online: isOnline,
-          clientId: clientId
-        });
         
         if (data.shouldInitiate && !pc && isOnline && clientId === 1) {
           console.log('Создаю P2P соединение как инициатор...');
@@ -100,10 +96,12 @@ function connectWebSocket() {
 
 // WebRTC P2P соединение
 function createPeerConnection(isInitiator) {
+  console.log('Создаю PeerConnection, isInitiator:', isInitiator);
   pc = new RTCPeerConnection(iceServers);
 
   pc.onicecandidate = (event) => {
     if (event.candidate && ws.readyState === WebSocket.OPEN) {
+      console.log('Отправляю ICE candidate');
       ws.send(JSON.stringify({
         type: 'ice-candidate',
         candidate: event.candidate
