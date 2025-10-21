@@ -1,228 +1,133 @@
-// Background service worker с постоянным WebSocket соединением
-
-// Background service worker с постоянным WebSocket соединением
+// Background service worker - управляет offscreen document для WebRTC
 
 const WS_URL = 'ws://localhost:3000'; // Для production замени на wss://твой-домен.com
 
-let ws = null;
-let pc = null;
-let dataChannel = null;
-let clientId = null;
 let isOnline = false;
+let channelOpen = false;
+let clientId = null;
 
-// WebRTC конфиг
-const iceServers = {
-  iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' }
-  ]
-};
+// Создание offscreen document при установке
+chrome.runtime.onInstalled.addListener(async () => {
+  await setupOffscreenDocument();
+  updateBadge(false);
+});
 
-// Подключение к WebSocket при старте
-connectWebSocket();
+// Создание offscreen document при старте
+chrome.runtime.onStartup.addListener(async () => {
+  await setupOffscreenDocument();
+});
 
-function connectWebSocket() {
-  ws = new WebSocket(WS_URL);
+// Создание offscreen document
+async function setupOffscreenDocument() {
+  const existingContexts = await chrome.runtime.getContexts({
+    contextTypes: ['OFFSCREEN_DOCUMENT'],
+    documentUrls: [chrome.runtime.getURL('offscreen.html')]
+  });
 
-  ws.onopen = () => {
-    console.log('WebSocket подключен');
-    notifyPopup({ type: 'connection', status: 'connected' });
-  };
-
-  ws.onmessage = async (event) => {
-    let data;
-    try {
-      // Проверяем тип данных
-      if (event.data instanceof Blob) {
-        data = JSON.parse(await event.data.text());
-      } else {
-        data = JSON.parse(event.data);
-      }
-    } catch (error) {
-      console.error('Ошибка парсинга сообщения:', error, event.data);
-      return;
-    }
-    
-    console.log('Получено:', data.type, data);
-
-    switch (data.type) {
-      case 'init':
-        clientId = data.clientId;
-        console.log('Мой ID:', clientId);
-        break;
-
-      case 'status':
-        const wasOnline = isOnline;
-        isOnline = data.count === 2;
-        console.log('Статус изменился:', { wasOnline, isOnline, shouldInitiate: data.shouldInitiate, hasPC: !!pc, clientId });
-        
-        updateBadge(isOnline);
-        notifyPopup({ type: 'status', online: isOnline, count: data.count });
-        
-        if (data.shouldInitiate && !pc && isOnline && clientId === 1) {
-          console.log('Создаю P2P соединение как инициатор...');
-          createPeerConnection(true);
-        }
-        break;
-
-      case 'offer':
-        console.log('Получен offer от другого клиента');
-        await handleOffer(data.offer);
-        break;
-
-      case 'answer':
-        console.log('Получен answer от другого клиента');
-        await handleAnswer(data.answer);
-        break;
-
-      case 'ice-candidate':
-        await handleIceCandidate(data.candidate);
-        break;
-    }
-  };
-
-  ws.onerror = (error) => {
-    console.error('WebSocket ошибка:', error);
-  };
-
-  ws.onclose = () => {
-    console.log('WebSocket отключен, переподключение через 3 сек...');
-    isOnline = false;
-    updateBadge(false);
-    closePeerConnection();
-    setTimeout(connectWebSocket, 3000);
-  };
-}
-
-// WebRTC P2P соединение
-function createPeerConnection(isInitiator) {
-  console.log('Создаю PeerConnection, isInitiator:', isInitiator);
-  pc = new RTCPeerConnection(iceServers);
-
-  pc.onicecandidate = (event) => {
-    if (event.candidate && ws.readyState === WebSocket.OPEN) {
-      console.log('Отправляю ICE candidate');
-      ws.send(JSON.stringify({
-        type: 'ice-candidate',
-        candidate: event.candidate
-      }));
-    }
-  };
-
-  pc.onconnectionstatechange = () => {
-    console.log('Connection state:', pc.connectionState);
-    if (pc.connectionState === 'connected') {
-      console.log('P2P соединение установлено!');
-    }
-  };
-
-  if (isInitiator) {
-    dataChannel = pc.createDataChannel('chat');
-    setupDataChannel();
-    
-    pc.createOffer()
-      .then(offer => pc.setLocalDescription(offer))
-      .then(() => {
-        console.log('Отправляю offer...');
-        ws.send(JSON.stringify({
-          type: 'offer',
-          offer: pc.localDescription
-        }));
-      });
-  } else {
-    pc.ondatachannel = (event) => {
-      dataChannel = event.channel;
-      setupDataChannel();
-    };
+  if (existingContexts.length > 0) {
+    console.log('Offscreen document уже существует');
+    return;
   }
-}
 
-function setupDataChannel() {
-  dataChannel.onopen = () => {
-    console.log('Data channel открыт');
-    notifyPopup({ type: 'channel', status: 'open' });
-  };
+  await chrome.offscreen.createDocument({
+    url: 'offscreen.html',
+    reasons: ['WEB_RTC'],
+    justification: 'WebRTC P2P соединение для мессенджера'
+  });
 
-  dataChannel.onclose = () => {
-    console.log('Data channel закрыт');
-    notifyPopup({ type: 'channel', status: 'closed' });
-  };
-
-  dataChannel.onmessage = (event) => {
-    const message = JSON.parse(event.data);
-    console.log('Получено сообщение:', message);
-    notifyPopup({ type: 'message', data: message });
-  };
-}
-
-async function handleOffer(offer) {
-  console.log('Обрабатываю offer...', offer);
-  try {
-    if (!pc) {
-      console.log('Создаю новое P2P соединение для ответа...');
-      createPeerConnection(false);
-    }
-
-    console.log('Устанавливаю remote description...');
-    await pc.setRemoteDescription(new RTCSessionDescription(offer));
-    
-    console.log('Создаю answer...');
-    const answer = await pc.createAnswer();
-    
-    console.log('Устанавливаю local description...');
-    await pc.setLocalDescription(answer);
-
-    console.log('Отправляю answer...', answer);
-    ws.send(JSON.stringify({
-      type: 'answer',
-      answer: pc.localDescription
-    }));
-    console.log('Answer отправлен успешно!');
-  } catch (error) {
-    console.error('Ошибка обработки offer:', error);
-  }
-}
-
-async function handleAnswer(answer) {
-  console.log('Обрабатываю answer...');
-  await pc.setRemoteDescription(new RTCSessionDescription(answer));
-}
-
-async function handleIceCandidate(candidate) {
-  if (pc) {
-    await pc.addIceCandidate(new RTCIceCandidate(candidate));
-  }
-}
-
-function closePeerConnection() {
-  if (dataChannel) {
-    dataChannel.close();
-    dataChannel = null;
-  }
-  if (pc) {
-    pc.close();
-    pc = null;
-  }
-}
-
-// Отправка сообщения
-function sendMessage(text) {
-  if (dataChannel && dataChannel.readyState === 'open') {
-    const time = new Date().toLocaleTimeString('ru-RU', { 
-      hour: '2-digit', 
-      minute: '2-digit' 
+  console.log('Offscreen document создан');
+  
+  // Подключаем WebSocket через offscreen
+  setTimeout(() => {
+    chrome.runtime.sendMessage({ 
+      type: 'ws-connect', 
+      url: WS_URL 
     });
-    const message = { text, time };
-    dataChannel.send(JSON.stringify(message));
-    return message;
-  }
-  return null;
+  }, 100);
 }
 
-// Уведомление popup
-function notifyPopup(data) {
-  chrome.runtime.sendMessage(data).catch(() => {
-    // Popup может быть закрыт
+// Инициализируем offscreen при загрузке
+setupOffscreenDocument();
+
+// Слушаем сообщения от offscreen и popup
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  console.log('[Background] Получено:', message.type, 'от', sender.url ? 'offscreen' : 'popup');
+
+  switch (message.type) {
+    case 'ws-open':
+      console.log('[Background] WebSocket подключен');
+      notifyPopup({ type: 'connection', status: 'connected' });
+      break;
+
+    case 'ws-close':
+      console.log('[Background] WebSocket отключен');
+      isOnline = false;
+      channelOpen = false;
+      updateBadge(false);
+      notifyPopup({ type: 'connection', status: 'disconnected' });
+      break;
+
+    case 'init':
+      clientId = message.clientId;
+      console.log('[Background] Мой ID:', clientId);
+      break;
+
+    case 'status':
+      isOnline = message.online;
+      console.log('[Background] Статус изменился:', { 
+        online: isOnline, 
+        shouldInitiate: message.shouldInitiate,
+        clientId: message.clientId 
+      });
+      updateBadge(isOnline);
+      notifyPopup({ type: 'status', online: isOnline, count: message.count });
+      break;
+
+    case 'channel-open':
+      channelOpen = true;
+      console.log('[Background] Data channel открыт');
+      notifyPopup({ type: 'channel', status: 'open' });
+      break;
+
+    case 'channel-close':
+      channelOpen = false;
+      console.log('[Background] Data channel закрыт');
+      notifyPopup({ type: 'channel', status: 'closed' });
+      break;
+
+    case 'message':
+      console.log('[Background] Получено сообщение:', message.data);
+      notifyPopup({ type: 'message', data: message.data });
+      break;
+
+    case 'getStatus':
+      console.log('[Background] Запрос статуса от popup');
+      sendResponse({ 
+        online: isOnline, 
+        channelOpen: channelOpen 
+      });
+      break;
+
+    case 'sendMessage':
+      console.log('[Background] Отправка сообщения через offscreen');
+      chrome.runtime.sendMessage({ 
+        type: 'send-message', 
+        data: message.data 
+      }).then(response => {
+        sendResponse(response);
+      }).catch(err => {
+        sendResponse({ success: false, error: err.message });
+      });
+      return true; // Асинхронный ответ
+  }
+
+  return true;
+});
+
+// Отправка сообщения в popup
+function notifyPopup(message) {
+  chrome.runtime.sendMessage(message).catch(() => {
+    // Popup может быть закрыт, это нормально
   });
 }
 
@@ -233,25 +138,4 @@ function updateBadge(online) {
   chrome.action.setBadgeText({ text: '●' });
 }
 
-// Обработка сообщений от popup
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log('Background получил сообщение:', message.type);
-  
-  if (message.type === 'sendMessage') {
-    const sent = sendMessage(message.text);
-    sendResponse({ success: !!sent, message: sent });
-  } else if (message.type === 'getStatus') {
-    const status = { 
-      online: isOnline, 
-      channelOpen: dataChannel?.readyState === 'open' 
-    };
-    console.log('Отправляю статус popup:', status);
-    sendResponse(status);
-  }
-  return true; // Асинхронный ответ
-});
-
-// При установке
-chrome.runtime.onInstalled.addListener(() => {
-  updateBadge(false);
-});
+console.log('[Background] Service Worker загружен');

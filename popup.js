@@ -75,12 +75,17 @@ function sendMessage() {
   const text = elements.messageInput.value.trim();
   if (!text) return;
 
+  const time = new Date().toLocaleTimeString('ru-RU', { 
+    hour: '2-digit', 
+    minute: '2-digit' 
+  });
+
   chrome.runtime.sendMessage({ 
     type: 'sendMessage', 
-    text: text 
+    data: { text, time }
   }, (response) => {
     if (response && response.success) {
-      addMessage(response.message.text, response.message.time, true);
+      addMessage(text, time, true);
       elements.messageInput.value = '';
       elements.messageInput.focus();
     } else {
