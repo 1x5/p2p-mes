@@ -17,13 +17,17 @@ let channelOpen = false;
 // Получение статуса при открытии popup
 chrome.runtime.sendMessage({ type: 'getStatus' }, (response) => {
   if (response) {
+    console.log('Получен статус от background:', response);
     updateUI(response.online, response.channelOpen);
+  } else {
+    console.log('Нет ответа от background, показываю офлайн');
+    updateUI(false, false);
   }
 });
 
 // Слушаем обновления от background
 chrome.runtime.onMessage.addListener((message) => {
-  console.log('Popup получил:', message);
+  console.log('Popup получил сообщение от background:', message);
 
   switch (message.type) {
     case 'status':
@@ -48,6 +52,8 @@ chrome.runtime.onMessage.addListener((message) => {
 
 // Обновление UI
 function updateUI(online, channelReady) {
+  console.log('Обновление UI:', { online, channelReady });
+  
   isOnline = online;
   channelOpen = channelReady;
 
@@ -77,6 +83,8 @@ function sendMessage() {
       addMessage(response.message.text, response.message.time, true);
       elements.messageInput.value = '';
       elements.messageInput.focus();
+    } else {
+      console.log('Не удалось отправить сообщение:', response);
     }
   });
 }

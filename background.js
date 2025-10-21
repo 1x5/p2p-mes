@@ -1,8 +1,8 @@
 // Background service worker с постоянным WebSocket соединением
 
-const WS_URL = window.location.protocol === 'https:' 
-  ? 'wss://твой-домен.com' 
-  : 'ws://localhost:3000';
+// Background service worker с постоянным WebSocket соединением
+
+const WS_URL = 'ws://localhost:3000'; // Для production замени на wss://твой-домен.com
 
 let ws = null;
 let pc = null;
@@ -237,14 +237,18 @@ function updateBadge(online) {
 
 // Обработка сообщений от popup
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  console.log('Background получил сообщение:', message.type);
+  
   if (message.type === 'sendMessage') {
     const sent = sendMessage(message.text);
     sendResponse({ success: !!sent, message: sent });
   } else if (message.type === 'getStatus') {
-    sendResponse({ 
+    const status = { 
       online: isOnline, 
       channelOpen: dataChannel?.readyState === 'open' 
-    });
+    };
+    console.log('Отправляю статус popup:', status);
+    sendResponse(status);
   }
   return true; // Асинхронный ответ
 });
