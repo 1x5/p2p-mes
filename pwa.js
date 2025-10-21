@@ -10,6 +10,7 @@ let dataChannel = null;
 let clientId = null;
 let isOnline = false;
 let shouldInitiate = false;
+let unreadCount = 0;
 
 // DOM элементы
 const elements = {
@@ -251,6 +252,12 @@ function setupDataChannel() {
       console.log('[PWA] Получено сообщение:', data);
       addMessage(data.text, data.time, false);
       
+      // Увеличиваем счетчик непрочитанных если приложение в фоне
+      if (document.hidden) {
+        unreadCount++;
+        updateBadge(unreadCount);
+      }
+      
       // Показываем push-уведомление
       showNotification('Новое сообщение', data.text);
     } catch (error) {
@@ -377,6 +384,29 @@ async function showNotification(title, body) {
     };
   }
 }
+
+// Badge API для непрочитанных сообщений
+function updateBadge(count) {
+  if ('setAppBadge' in navigator) {
+    if (count > 0) {
+      navigator.setAppBadge(count).catch(err => {
+        console.log('[PWA] Ошибка установки badge:', err);
+      });
+    } else {
+      navigator.clearAppBadge().catch(err => {
+        console.log('[PWA] Ошибка очистки badge:', err);
+      });
+    }
+  }
+}
+
+// Сброс счетчика при фокусе на приложении
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) {
+    unreadCount = 0;
+    updateBadge(0);
+  }
+});
 
 // Запрос разрешения на уведомления
 if ('Notification' in window && Notification.permission === 'default') {
