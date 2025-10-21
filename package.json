@@ -1,0 +1,23 @@
+{
+  "name": "p2p-messenger",
+  "version": "1.0.0",
+  "description": "Минималистичный P2P мессенджер для двоих",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [
+    "p2p",
+    "messenger",
+    "webrtc",
+    "websocket"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "ws": "^8.14.2"
+  }
+}
+
