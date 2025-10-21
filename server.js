@@ -117,8 +117,9 @@ setInterval(() => {
   });
 }, PING_INTERVAL);
 
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Сигнальный сервер запущен на порту ${PORT}`);
   console.log(`   WebSocket: ws://localhost:${PORT}`);
+  console.log(`   WebSocket для iPhone: ws://192.168.3.83:${PORT}`);
 });
 
