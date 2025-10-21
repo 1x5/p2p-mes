@@ -1,0 +1,32 @@
+
+<svg width="144" height="144" viewBox="0 0 144 144" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1d4ed8;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="msg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#f8fafc;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background circle -->
+  <circle cx="72" cy="72" r="68" fill="url(#bg)" stroke="#1e40af" stroke-width="2"/>
+  
+  <!-- P2P connection lines -->
+  <path d="M 43.199999999999996 57.6 Q 72 43.199999999999996 100.8 57.6" stroke="url(#msg)" stroke-width="2.88" fill="none" opacity="0.8"/>
+  <path d="M 43.199999999999996 86.39999999999999 Q 72 100.8 100.8 86.39999999999999" stroke="url(#msg)" stroke-width="2.88" fill="none" opacity="0.8"/>
+  
+  <!-- Message bubbles -->
+  <circle cx="50.4" cy="57.6" r="7.2" fill="url(#msg)" opacity="0.9"/>
+  <circle cx="93.60000000000001" cy="57.6" r="7.2" fill="url(#msg)" opacity="0.9"/>
+  <circle cx="50.4" cy="86.39999999999999" r="7.2" fill="url(#msg)" opacity="0.9"/>
+  <circle cx="93.60000000000001" cy="86.39999999999999" r="7.2" fill="url(#msg)" opacity="0.9"/>
+  
+  <!-- Central connection point -->
+  <circle cx="72" cy="72" r="9.6" fill="url(#msg)" stroke="#3b82f6" stroke-width="1.44"/>
+  
+  <!-- Text "P2P" -->
+  <text x="72" y="75.6" font-family="Arial, sans-serif" font-size="7.2" font-weight="bold" text-anchor="middle" fill="#3b82f6">P2P</text>
+</svg>
