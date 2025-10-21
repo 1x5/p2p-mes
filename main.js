@@ -1,6 +1,6 @@
 // Electron main process - главный процесс приложения
 
-const { app, BrowserWindow, Tray, Menu, nativeImage } = require('electron');
+const { app, BrowserWindow, Tray, Menu, nativeImage, Notification, ipcMain } = require('electron');
 const path = require('path');
 
 let mainWindow = null;
@@ -17,7 +17,7 @@ function createWindow() {
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js')
     },
-    title: 'P2P Messenger',
+    title: 'p2p-mas',
     show: false // Не показываем сразу, покажем когда загрузится
   });
 
@@ -65,7 +65,7 @@ function createTray() {
     }
   ]);
 
-  tray.setToolTip('P2P Messenger');
+  tray.setToolTip('p2p-mas');
   tray.setContextMenu(contextMenu);
 
   // Клик по иконке показывает окно
@@ -82,20 +82,43 @@ function createTray() {
 function updateTrayIcon(isOnline) {
   if (!tray) return;
 
-  // Создаем canvas для иконки
-  const size = 16;
-  const canvas = require('canvas').createCanvas(size, size);
-  const ctx = canvas.getContext('2d');
-
-  // Рисуем круг
-  ctx.fillStyle = isOnline ? '#10b981' : '#ef4444';
-  ctx.beginPath();
-  ctx.arc(size / 2, size / 2, size / 2 - 2, 0, 2 * Math.PI);
-  ctx.fill();
-
-  const icon = nativeImage.createFromBuffer(canvas.toBuffer());
+  // Создаем простую иконку из SVG
+  const color = isOnline ? '#10b981' : '#ef4444';
+  const svgIcon = `
+    <svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="8" cy="8" r="6" fill="${color}" stroke="#ffffff" stroke-width="1"/>
+    </svg>
+  `;
+  
+  const icon = nativeImage.createFromDataURL(`data:image/svg+xml;base64,${Buffer.from(svgIcon).toString('base64')}`);
   tray.setImage(icon);
 }
+
+// Обработчик уведомлений
+ipcMain.handle('show-notification', (event, title, body) => {
+  if (Notification.isSupported()) {
+    const notification = new Notification({
+      title: title,
+      body: body,
+      icon: path.join(__dirname, 'icon.svg'),
+      silent: false
+    });
+    
+    notification.on('click', () => {
+      if (mainWindow) {
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    });
+    
+    notification.show();
+  }
+});
+
+// Обработчик обновления tray иконки
+ipcMain.on('update-tray-icon', (event, isOnline) => {
+  updateTrayIcon(isOnline);
+});
 
 // Запуск приложения
 app.whenReady().then(() => {

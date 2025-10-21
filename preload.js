@@ -9,7 +9,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   
   showNotification: (title, body) => {
-    ipcRenderer.send('show-notification', { title, body });
+    ipcRenderer.invoke('show-notification', title, body);
   }
 });
 

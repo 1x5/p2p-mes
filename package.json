@@ -1,12 +1,15 @@
 {
-  "name": "p2p-messenger",
+  "name": "p2p-mas",
   "version": "1.0.0",
   "description": "Минималистичный P2P мессенджер для двоих",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "server": "node server.js",
-    "dev": "electron . --enable-logging"
+    "dev": "electron . --enable-logging",
+    "build": "electron-builder",
+    "build-mac": "electron-builder --mac",
+    "dist": "electron-builder --publish=never"
   },
   "keywords": [
     "p2p",
@@ -17,14 +20,33 @@
   ],
   "author": "",
   "license": "MIT",
+  "build": {
+    "appId": "com.p2p-mas.app",
+    "productName": "p2p-mas",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "app.html",
+      "app.js",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.social-networking",
+      "target": "dmg"
+    },
+    "dmg": {
+      "title": "p2p-mas"
+    }
+  },
   "dependencies": {
-    "canvas": "^2.11.2",
-    "electron": "^27.0.0",
     "express": "^4.18.2",
     "ws": "^8.14.2"
   },
   "devDependencies": {
-    "electron": "^27.0.0"
+    "electron": "^27.0.0",
+    "electron-builder": "^24.13.3"
   }
 }
-
