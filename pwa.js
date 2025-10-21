@@ -400,11 +400,17 @@ function updateBadge(count) {
   }
 }
 
-// Сброс счетчика при фокусе на приложении
+// Сброс счетчика при фокусе на приложении и переподключение
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) {
     unreadCount = 0;
     updateBadge(0);
+    
+    // Переподключаемся если потеряли соединение
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      console.log('[PWA] Приложение активно, переподключаемся...');
+      connectWebSocket();
+    }
   }
 });
 
@@ -442,3 +448,4 @@ window.addEventListener('orientationchange', () => {
 });
 
 console.log('[PWA] p2p-mas PWA загружен');
+жидание 
