@@ -44,7 +44,7 @@ function connectWebSocket() {
       case 'status':
         isOnline = data.count === 2;
         console.log('[Background] Статус:', { online: isOnline, shouldInitiate: data.shouldInitiate });
-        updateBadge(isOnline);
+        // НЕ меняем badge здесь - только когда P2P реально подключится
         notifyPopup({ type: 'status', online: isOnline, shouldInitiate: data.shouldInitiate });
         break;
 
@@ -98,12 +98,16 @@ chrome.runtime.onConnect.addListener((port) => {
           }
           break;
 
-        case 'new-message':
-          // Popup отправил сообщение - сохраняем для истории
+        case 'p2p-connected':
+          // P2P соединение установлено - показываем зеленый badge
+          console.log('[Background] P2P соединение активно');
+          updateBadge(true);
           break;
 
-        case 'message-received':
-          // Popup получил сообщение через WebRTC
+        case 'p2p-disconnected':
+          // P2P соединение закрыто - показываем красный badge
+          console.log('[Background] P2P соединение закрыто');
+          updateBadge(false);
           break;
       }
     });
@@ -111,6 +115,8 @@ chrome.runtime.onConnect.addListener((port) => {
     port.onDisconnect.addListener(() => {
       console.log('[Background] Popup отключился');
       popupPort = null;
+      // Popup закрыт = P2P закрыт = красный badge
+      updateBadge(false);
     });
   }
 });

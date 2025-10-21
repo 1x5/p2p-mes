@@ -69,6 +69,7 @@ port.onMessage.addListener((message) => {
       elements.connectionStatus.textContent = 'Переподключение...';
       isOnline = false;
       closePeerConnection();
+      port.postMessage({ type: 'p2p-disconnected' });
       updateUI();
       break;
   }
@@ -146,11 +147,15 @@ function createPeerConnection(isInitiator) {
 function setupDataChannel() {
   dataChannel.onopen = () => {
     console.log('[Popup] Data channel открыт');
+    // Сообщаем background что P2P подключен
+    port.postMessage({ type: 'p2p-connected' });
     updateUI();
   };
 
   dataChannel.onclose = () => {
     console.log('[Popup] Data channel закрыт');
+    // Сообщаем background что P2P отключен
+    port.postMessage({ type: 'p2p-disconnected' });
     updateUI();
   };
 
