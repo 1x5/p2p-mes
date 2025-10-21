@@ -8,6 +8,8 @@ const wss = new WebSocket.Server({ server });
 
 const PORT = process.env.PORT || 3000;
 const MAX_CLIENTS = 2;
+const PING_INTERVAL = 30000; // 30 секунд
+const PONG_TIMEOUT = 10000; // 10 секунд
 
 let clients = new Map(); // Map вместо Set для сохранения ID
 let nextClientId = 1; // Счетчик для уникальных ID
@@ -34,6 +36,7 @@ wss.on('connection', (ws) => {
   }
   
   ws.clientId = clientId;
+  ws.isAlive = true;
   clients.set(clientId, ws);
   
   // Отправляем клиенту его ID
@@ -41,6 +44,11 @@ wss.on('connection', (ws) => {
     type: 'init',
     clientId: ws.clientId
   }));
+  
+  // Настраиваем heartbeat
+  ws.on('pong', () => {
+    ws.isAlive = true;
+  });
   
   // Отправка статуса всем клиентам
   broadcastStatus();
@@ -92,6 +100,22 @@ function broadcastStatus() {
 
   console.log(`Статус: ${clients.size}/${MAX_CLIENTS} клиентов`);
 }
+
+// Периодическая проверка соединений
+setInterval(() => {
+  clients.forEach((ws, clientId) => {
+    if (ws.isAlive === false) {
+      console.log(`Клиент ${clientId} не отвечает, закрываю соединение`);
+      ws.terminate();
+      clients.delete(clientId);
+      broadcastStatus();
+      return;
+    }
+    
+    ws.isAlive = false;
+    ws.ping();
+  });
+}, PING_INTERVAL);
 
 server.listen(PORT, () => {
   console.log(`🚀 Сигнальный сервер запущен на порту ${PORT}`);

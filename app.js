@@ -38,6 +38,10 @@ function connectWebSocket() {
     elements.connectionStatus.textContent = 'Подключено к серверу';
   };
 
+  ws.onpong = () => {
+    console.log('[App] Получен pong от сервера');
+  };
+
   ws.onmessage = async (event) => {
     let data;
     try {
@@ -95,8 +99,12 @@ function connectWebSocket() {
     console.error('[App] WebSocket ошибка:', error);
   };
 
-  ws.onclose = () => {
-    console.log('[App] WebSocket закрыт, переподключение...');
+  ws.onclose = (event) => {
+    console.log('[App] WebSocket закрыт:', {
+      code: event.code,
+      reason: event.reason,
+      wasClean: event.wasClean
+    });
     elements.connectionStatus.textContent = 'Переподключение...';
     isOnline = false;
     closePeerConnection();
