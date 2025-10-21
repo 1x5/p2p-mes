@@ -2,7 +2,7 @@
 // Определяем URL WebSocket сервера
 const WS_URL = (window.location.hostname === 'localhost' || window.location.hostname === '192.168.3.83')
   ? 'ws://192.168.3.83:3000' 
-  : 'wss://confirm4you.com';
+  : 'wss://confirm4you.com/ws';
 
 let ws = null;
 let pc = null;
