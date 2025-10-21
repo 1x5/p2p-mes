@@ -56,11 +56,12 @@ wss.on('connection', (ws) => {
   ws.on('message', (message) => {
     try {
       const data = JSON.parse(message);
-      console.log('Получено:', data.type);
+      console.log(`Получено от клиента ${ws.clientId}:`, data.type);
 
       // Пересылка сигналов WebRTC другому клиенту
       clients.forEach((client, id) => {
         if (id !== ws.clientId && client.readyState === WebSocket.OPEN) {
+          console.log(`Отправляю ${data.type} клиенту ${id}`);
           client.send(message);
         }
       });
@@ -94,6 +95,7 @@ function broadcastStatus() {
         count: clients.size,
         shouldInitiate: clientId === 1 && online // Только первый клиент инициирует
       };
+      console.log(`Отправляю статус клиенту ${clientId}:`, status);
       client.send(JSON.stringify(status));
     }
   });

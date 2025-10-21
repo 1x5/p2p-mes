@@ -1,6 +1,6 @@
 // PWA версия p2p-mas
 // Определяем URL WebSocket сервера
-const WS_URL = window.location.hostname === 'localhost' || window.location.hostname === '192.168.3.83' 
+const WS_URL = (window.location.hostname === 'localhost' || window.location.hostname === '192.168.3.83')
   ? 'ws://192.168.3.83:3000' 
   : 'wss://confirm4you.com';
 
@@ -77,7 +77,7 @@ function connectWebSocket() {
   ws = new WebSocket(WS_URL);
 
   ws.onopen = () => {
-    console.log('[PWA] WebSocket подключен');
+    console.log('[PWA] WebSocket подключен к:', WS_URL);
     elements.connectionStatus.textContent = 'Подключено к серверу';
   };
 
@@ -109,7 +109,13 @@ function connectWebSocket() {
       case 'status':
         isOnline = data.count === 2;
         shouldInitiate = data.shouldInitiate;
-        console.log('[PWA] Статус:', { isOnline, shouldInitiate });
+        console.log('[PWA] Статус получен:', { 
+          count: data.count, 
+          isOnline, 
+          shouldInitiate, 
+          hasPC: !!pc,
+          channelOpen: dataChannel?.readyState === 'open'
+        });
         updateUI();
 
         // Создаем P2P если нужно
@@ -156,36 +162,79 @@ function connectWebSocket() {
 function createPeerConnection(isInitiator) {
   console.log('[PWA] Создаю PeerConnection, isInitiator:', isInitiator);
   
-  pc = new RTCPeerConnection({
-    iceServers: [
-      { urls: 'stun:stun.l.google.com:19302' },
-      { urls: 'stun:stun1.l.google.com:19302' }
-    ]
-  });
+  try {
+    pc = new RTCPeerConnection({
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' }
+      ]
+    });
+    console.log('[PWA] PeerConnection создан успешно');
+  } catch (error) {
+    console.error('[PWA] Ошибка создания PeerConnection:', error);
+    return;
+  }
 
   pc.onicecandidate = (event) => {
     if (event.candidate) {
+      console.log('[PWA] Отправка ICE candidate');
       ws.send(JSON.stringify({
         type: 'ice-candidate',
         candidate: event.candidate
       }));
+    } else {
+      console.log('[PWA] ICE gathering завершен');
     }
   };
 
+  pc.oniceconnectionstatechange = () => {
+    console.log('[PWA] ICE connection state:', pc.iceConnectionState);
+  };
+
+  pc.onconnectionstatechange = () => {
+    console.log('[PWA] Connection state:', pc.connectionState);
+  };
+
   if (isInitiator) {
-    dataChannel = pc.createDataChannel('messages', {
-      ordered: true
-    });
-    setupDataChannel();
+    try {
+      dataChannel = pc.createDataChannel('messages', {
+        ordered: true
+      });
+      console.log('[PWA] DataChannel создан');
+      setupDataChannel();
+    } catch (error) {
+      console.error('[PWA] Ошибка создания DataChannel:', error);
+    }
   } else {
     pc.ondatachannel = (event) => {
       dataChannel = event.channel;
+      console.log('[PWA] DataChannel получен');
       setupDataChannel();
     };
+  }
+
+  // Создаем offer если это инициатор
+  if (isInitiator) {
+    setTimeout(async () => {
+      try {
+        console.log('[PWA] Создаю offer...');
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        console.log('[PWA] Offer создан и отправлен');
+        ws.send(JSON.stringify({
+          type: 'offer',
+          offer: pc.localDescription
+        }));
+      } catch (error) {
+        console.error('[PWA] Ошибка создания offer:', error);
+      }
+    }, 1000);
   }
 }
 
 function setupDataChannel() {
+  console.log('[PWA] Настройка data channel, текущее состояние:', dataChannel.readyState);
+  
   dataChannel.onopen = () => {
     console.log('[PWA] Data channel открыт');
     updateUI();
@@ -254,16 +303,23 @@ function closePeerConnection() {
 function updateUI() {
   const channelOpen = dataChannel && dataChannel.readyState === 'open';
   
-  console.log('[PWA] Обновление UI:', { isOnline, channelOpen });
+  console.log('[PWA] Обновление UI:', { 
+    isOnline, 
+    channelOpen, 
+    dataChannelState: dataChannel?.readyState,
+    shouldShowChat: isOnline && channelOpen
+  });
 
   elements.statusDot.classList.toggle('online', isOnline && channelOpen);
   elements.statusText.textContent = (isOnline && channelOpen) ? 'Онлайн' : 'Офлайн';
 
   if (isOnline && channelOpen) {
+    console.log('[PWA] Показываем чат');
     elements.waiting.style.display = 'none';
     elements.chat.classList.add('active');
     elements.messageInput.focus();
   } else {
+    console.log('[PWA] Показываем ожидание');
     elements.waiting.style.display = 'flex';
     elements.chat.classList.remove('active');
   }
