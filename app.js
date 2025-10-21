@@ -1,6 +1,6 @@
 // Renderer process - WebRTC P2P логика для Electron
 
-const WS_URL = 'wss://confirm4you.com';
+const WS_URL = 'wss://confirm4you.com/ws';
 
 const elements = {
   waiting: document.getElementById('waiting'),
