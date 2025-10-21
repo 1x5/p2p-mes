@@ -232,5 +232,12 @@ function notifyBackground(message) {
   });
 }
 
+// Keepalive - держим offscreen document активным
+setInterval(() => {
+  chrome.runtime.sendMessage({ type: 'keepalive' }).catch(() => {
+    console.log('[Offscreen] Background недоступен');
+  });
+}, 20000); // Каждые 20 секунд
+
 console.log('[Offscreen] Offscreen document загружен');
 

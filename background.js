@@ -6,6 +6,39 @@ let isOnline = false;
 let channelOpen = false;
 let clientId = null;
 
+// Создание offscreen document
+async function setupOffscreenDocument() {
+  try {
+    const existingContexts = await chrome.runtime.getContexts({
+      contextTypes: ['OFFSCREEN_DOCUMENT'],
+      documentUrls: [chrome.runtime.getURL('offscreen.html')]
+    });
+
+    if (existingContexts.length > 0) {
+      console.log('[Background] Offscreen document уже существует');
+      return;
+    }
+
+    await chrome.offscreen.createDocument({
+      url: 'offscreen.html',
+      reasons: ['WEB_RTC'],
+      justification: 'WebRTC P2P соединение для мессенджера'
+    });
+
+    console.log('[Background] Offscreen document создан');
+    
+    // Подключаем WebSocket через offscreen
+    setTimeout(() => {
+      chrome.runtime.sendMessage({ 
+        type: 'ws-connect', 
+        url: WS_URL 
+      }).catch(err => console.log('[Background] Offscreen еще не готов:', err.message));
+    }, 200);
+  } catch (error) {
+    console.error('[Background] Ошибка создания offscreen:', error);
+  }
+}
+
 // Создание offscreen document при установке
 chrome.runtime.onInstalled.addListener(async () => {
   await setupOffscreenDocument();
@@ -16,38 +49,6 @@ chrome.runtime.onInstalled.addListener(async () => {
 chrome.runtime.onStartup.addListener(async () => {
   await setupOffscreenDocument();
 });
-
-// Создание offscreen document
-async function setupOffscreenDocument() {
-  const existingContexts = await chrome.runtime.getContexts({
-    contextTypes: ['OFFSCREEN_DOCUMENT'],
-    documentUrls: [chrome.runtime.getURL('offscreen.html')]
-  });
-
-  if (existingContexts.length > 0) {
-    console.log('Offscreen document уже существует');
-    return;
-  }
-
-  await chrome.offscreen.createDocument({
-    url: 'offscreen.html',
-    reasons: ['WEB_RTC'],
-    justification: 'WebRTC P2P соединение для мессенджера'
-  });
-
-  console.log('Offscreen document создан');
-  
-  // Подключаем WebSocket через offscreen
-  setTimeout(() => {
-    chrome.runtime.sendMessage({ 
-      type: 'ws-connect', 
-      url: WS_URL 
-    });
-  }, 100);
-}
-
-// Инициализируем offscreen при загрузке
-setupOffscreenDocument();
 
 // Слушаем сообщения от offscreen и popup
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -119,6 +120,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ success: false, error: err.message });
       });
       return true; // Асинхронный ответ
+
+    case 'keepalive':
+      // Offscreen document шлет keepalive чтобы оставаться активным
+      sendResponse({ alive: true });
+      break;
   }
 
   return true;
