@@ -328,8 +328,14 @@ document.addEventListener('visibilitychange', () => {
           pc = null;
           dataChannel = null;
         }
-        // Ждем статус от сервера чтобы пересоздать P2P
-        // Статус придет автоматически при изменении количества клиентов
+        
+        // Пересоздаем P2P если мы инициатор и оба онлайн
+        if (isOnline && shouldInitiate) {
+          console.log('[App] Пересоздаем P2P соединение...');
+          setTimeout(() => {
+            createPeerConnection(true);
+          }, 500);
+        }
       }
     }
   } else {
