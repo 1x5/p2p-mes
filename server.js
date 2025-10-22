@@ -8,8 +8,8 @@ const wss = new WebSocket.Server({ server });
 
 const PORT = process.env.PORT || 3000;
 const MAX_CLIENTS = 2;
-const PING_INTERVAL = 30000; // 30 секунд
-const PONG_TIMEOUT = 10000; // 10 секунд
+const PING_INTERVAL = 15000; // 15 секунд (быстрее)
+const PONG_TIMEOUT = 5000; // 5 секунд (быстрее)
 
 let clients = new Map(); // Map вместо Set для сохранения ID
 let nextClientId = 1; // Счетчик для уникальных ID
@@ -89,11 +89,17 @@ function broadcastStatus() {
   
   clients.forEach((client, clientId) => {
     if (client.readyState === WebSocket.OPEN) {
+      // Умная логика инициации:
+      // - Если оба онлайн, клиент 1 инициирует
+      // - Если только один онлайн, он ждет второго
+      // - Добавляем флаг готовности к соединению
       const status = {
         type: 'status',
         online: online,
         count: clients.size,
-        shouldInitiate: clientId === 1 && online // Только первый клиент инициирует
+        shouldInitiate: clientId === 1 && online, // Только первый клиент инициирует
+        readyToConnect: online, // Готов к соединению
+        connectionState: online ? 'ready' : 'waiting' // Состояние соединения
       };
       console.log(`Отправляю статус клиенту ${clientId}:`, status);
       client.send(JSON.stringify(status));
@@ -118,6 +124,14 @@ setInterval(() => {
     ws.ping();
   });
 }, PING_INTERVAL);
+
+// Дополнительная проверка статуса каждые 5 секунд
+setInterval(() => {
+  if (clients.size > 0) {
+    console.log(`Проверка статуса: ${clients.size}/${MAX_CLIENTS} клиентов`);
+    broadcastStatus();
+  }
+}, 5000);
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Сигнальный сервер запущен на порту ${PORT}`);

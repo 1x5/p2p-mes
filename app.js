@@ -21,6 +21,34 @@ let isOnline = false;
 let clientId = null;
 let shouldInitiate = false;
 
+// Периодическая проверка соединения
+let connectionCheckInterval = null;
+
+function startConnectionCheck() {
+  if (connectionCheckInterval) return;
+  
+  connectionCheckInterval = setInterval(() => {
+    if (isOnline && shouldInitiate && (!pc || !dataChannel || dataChannel.readyState !== 'open')) {
+      console.log('[App] Периодическая проверка: пересоздаем P2P соединение');
+      if (pc) {
+        pc.close();
+        pc = null;
+        dataChannel = null;
+      }
+      setTimeout(() => {
+        createPeerConnection(true);
+      }, 100);
+    }
+  }, 2000); // Проверяем каждые 2 секунды
+}
+
+function stopConnectionCheck() {
+  if (connectionCheckInterval) {
+    clearInterval(connectionCheckInterval);
+    connectionCheckInterval = null;
+  }
+}
+
 const iceServers = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
@@ -67,10 +95,15 @@ function connectWebSocket() {
       case 'status':
         isOnline = data.count === 2;
         shouldInitiate = data.shouldInitiate;
+        const readyToConnect = data.readyToConnect;
+        const connectionState = data.connectionState;
+        
         console.log('[App] Статус:', { 
           count: data.count,
           isOnline, 
           shouldInitiate,
+          readyToConnect,
+          connectionState,
           hasPC: !!pc,
           channelOpen: dataChannel?.readyState === 'open'
         });
@@ -81,8 +114,8 @@ function connectWebSocket() {
           window.electronAPI.updateTrayIcon(isOnline && dataChannel?.readyState === 'open');
         }
 
-        // Создаем P2P если нужно
-        const needNewPeerConnection = isOnline && shouldInitiate && 
+        // Улучшенная логика создания P2P соединения
+        const needNewPeerConnection = isOnline && shouldInitiate && readyToConnect && 
           (!pc || !dataChannel || dataChannel.readyState !== 'open');
         
         if (needNewPeerConnection) {
@@ -93,7 +126,19 @@ function connectWebSocket() {
             pc = null;
             dataChannel = null;
           }
-          createPeerConnection(true);
+          // Небольшая задержка для стабильности
+          setTimeout(() => {
+            createPeerConnection(true);
+          }, 100);
+          // Запускаем периодическую проверку
+          startConnectionCheck();
+        } else if (isOnline && !shouldInitiate && readyToConnect && 
+                   (!pc || !dataChannel || dataChannel.readyState !== 'open')) {
+          console.log('[App] Готов принимать P2P соединение');
+          // Клиент готов принимать соединение
+        } else if (!isOnline) {
+          // Если не онлайн, останавливаем проверку
+          stopConnectionCheck();
         }
         break;
 
@@ -181,6 +226,8 @@ function createPeerConnection(isInitiator) {
 function setupDataChannel() {
   dataChannel.onopen = () => {
     console.log('[App] Data channel открыт');
+    // Останавливаем периодическую проверку когда соединение установлено
+    stopConnectionCheck();
     updateUI();
     
     // Обновляем tray иконку на зеленую
@@ -339,6 +386,8 @@ document.addEventListener('visibilitychange', () => {
           setTimeout(() => {
             createPeerConnection(true);
           }, 500);
+          // Запускаем периодическую проверку
+          startConnectionCheck();
         } else {
           console.log('[App] НЕ пересоздаем P2P, причина:', {
             isOnline: isOnline ? 'ОК' : 'ОФЛАЙН',
