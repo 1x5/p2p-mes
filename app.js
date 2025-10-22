@@ -292,6 +292,31 @@ function addMessage(text, time, isMine) {
   elements.messages.scrollTop = elements.messages.scrollHeight;
 }
 
+// Автопереподключение при возврате в приложение
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) {
+    console.log('[App] Приложение стало активным');
+    
+    // Переподключаемся если потеряли соединение
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      console.log('[App] WebSocket не подключен, переподключаемся...');
+      connectWebSocket();
+    } else {
+      console.log('[App] WebSocket уже подключен');
+      // Проверяем P2P соединение
+      if (!dataChannel || dataChannel.readyState !== 'open') {
+        console.log('[App] P2P не активен, запрашиваем переподключение...');
+        // Запрашиваем обновление статуса с сервера
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'ping' }));
+        }
+      }
+    }
+  } else {
+    console.log('[App] Приложение ушло в фон');
+  }
+});
+
 // События
 elements.sendBtn.addEventListener('click', sendMessage);
 elements.messageInput.addEventListener('keypress', (e) => {
