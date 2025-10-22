@@ -67,7 +67,13 @@ function connectWebSocket() {
       case 'status':
         isOnline = data.count === 2;
         shouldInitiate = data.shouldInitiate;
-        console.log('[App] Статус:', { isOnline, shouldInitiate });
+        console.log('[App] Статус:', { 
+          count: data.count,
+          isOnline, 
+          shouldInitiate,
+          hasPC: !!pc,
+          channelOpen: dataChannel?.readyState === 'open'
+        });
         updateUI();
 
         // Обновляем tray иконку
@@ -76,8 +82,17 @@ function connectWebSocket() {
         }
 
         // Создаем P2P если нужно
-        if (isOnline && shouldInitiate && !pc) {
-          console.log('[App] Создаю P2P как инициатор');
+        const needNewPeerConnection = isOnline && shouldInitiate && 
+          (!pc || !dataChannel || dataChannel.readyState !== 'open');
+        
+        if (needNewPeerConnection) {
+          console.log('[App] Создаю/пересоздаю P2P как инициатор');
+          // Закрываем старое соединение если есть
+          if (pc) {
+            pc.close();
+            pc = null;
+            dataChannel = null;
+          }
           createPeerConnection(true);
         }
         break;
