@@ -305,11 +305,15 @@ document.addEventListener('visibilitychange', () => {
       console.log('[App] WebSocket уже подключен');
       // Проверяем P2P соединение
       if (!dataChannel || dataChannel.readyState !== 'open') {
-        console.log('[App] P2P не активен, запрашиваем переподключение...');
-        // Запрашиваем обновление статуса с сервера
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: 'ping' }));
+        console.log('[App] P2P не активен, пересоздаем соединение...');
+        // Закрываем старое P2P если есть
+        if (pc) {
+          pc.close();
+          pc = null;
+          dataChannel = null;
         }
+        // Ждем статус от сервера чтобы пересоздать P2P
+        // Статус придет автоматически при изменении количества клиентов
       }
     }
   } else {
