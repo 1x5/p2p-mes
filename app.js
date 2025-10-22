@@ -321,7 +321,11 @@ document.addEventListener('visibilitychange', () => {
       console.log('[App] WebSocket уже подключен');
       // Проверяем P2P соединение
       if (!dataChannel || dataChannel.readyState !== 'open') {
-        console.log('[App] P2P не активен, пересоздаем соединение...');
+        console.log('[App] P2P не активен, пересоздаем соединение...', {
+          isOnline,
+          shouldInitiate,
+          clientId
+        });
         // Закрываем старое P2P если есть
         if (pc) {
           pc.close();
@@ -335,6 +339,11 @@ document.addEventListener('visibilitychange', () => {
           setTimeout(() => {
             createPeerConnection(true);
           }, 500);
+        } else {
+          console.log('[App] НЕ пересоздаем P2P, причина:', {
+            isOnline: isOnline ? 'ОК' : 'ОФЛАЙН',
+            shouldInitiate: shouldInitiate ? 'ОК' : 'НЕ ИНИЦИАТОР'
+          });
         }
       }
     }
