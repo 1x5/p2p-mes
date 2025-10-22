@@ -59,7 +59,7 @@ function startConnectionCheck() {
       }
       createPeerConnection(true);
     }
-  }, 500); // Проверяем каждые 0.5 секунды
+  }, 2000); // Проверяем каждые 2 секунды (было 0.5 сек)
 }
 
 function stopConnectionCheck() {
@@ -166,6 +166,9 @@ function connectWebSocket() {
             createPeerConnection(true);
             // Запускаем периодическую проверку
             startConnectionCheck();
+          } else {
+            console.log('[PWA] P2P уже работает, останавливаем проверку');
+            stopConnectionCheck();
           }
         } else if (!isOnline) {
           // Если не онлайн, останавливаем проверку
@@ -183,6 +186,12 @@ function connectWebSocket() {
 
       case 'ice-candidate':
         await handleIceCandidate(data.candidate);
+        break;
+
+      case 'error':
+        console.log('[PWA] Получена ошибка от сервера:', data.message);
+        // Останавливаем все проверки при ошибке
+        stopConnectionCheck();
         break;
     }
   };
