@@ -57,7 +57,11 @@ function startConnectionCheck() {
         pc = null;
         dataChannel = null;
       }
-      createPeerConnection(true);
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        createPeerConnection(true);
+      } else {
+        console.log('[PWA] WebSocket не готов для периодической проверки');
+      }
     }
   }, 2000); // Проверяем каждые 2 секунды (было 0.5 сек)
 }
@@ -162,8 +166,14 @@ function connectWebSocket() {
               pc = null;
               dataChannel = null;
             }
-            // Мгновенное создание соединения
-            createPeerConnection(true);
+            // Небольшая задержка чтобы WebSocket успел подключиться
+            setTimeout(() => {
+              if (ws && ws.readyState === WebSocket.OPEN) {
+                createPeerConnection(true);
+              } else {
+                console.log('[PWA] WebSocket не готов, пропускаем создание P2P');
+              }
+            }, 100);
             // Запускаем периодическую проверку
             startConnectionCheck();
           } else {
@@ -276,10 +286,14 @@ function createPeerConnection(isInitiator) {
       .then(offer => pc.setLocalDescription(offer))
       .then(() => {
         console.log('[PWA] Offer создан и отправлен');
-        ws.send(JSON.stringify({
-          type: 'offer',
-          offer: pc.localDescription
-        }));
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({
+            type: 'offer',
+            offer: pc.localDescription
+          }));
+        } else {
+          console.log('[PWA] WebSocket не готов для отправки offer');
+        }
       })
       .catch(error => console.error('[PWA] Ошибка создания offer:', error));
   }
@@ -330,10 +344,14 @@ async function handleOffer(offer) {
   const answer = await pc.createAnswer();
   await pc.setLocalDescription(answer);
 
-  ws.send(JSON.stringify({
-    type: 'answer',
-    answer: pc.localDescription
-  }));
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({
+      type: 'answer',
+      answer: pc.localDescription
+    }));
+  } else {
+    console.log('[PWA] WebSocket не готов для отправки answer');
+  }
 }
 
 async function handleAnswer(answer) {
