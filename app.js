@@ -1,5 +1,6 @@
 // Renderer process - WebRTC P2P логика для Electron
 
+// Автоматическое определение локального или продакшн сервера
 const WS_URL = 'wss://confirm4you.com/ws';
 
 const elements = {
