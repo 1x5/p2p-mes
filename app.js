@@ -35,11 +35,9 @@ function startConnectionCheck() {
         pc = null;
         dataChannel = null;
       }
-      setTimeout(() => {
-        createPeerConnection(true);
-      }, 100);
+      createPeerConnection(true);
     }
-  }, 2000); // Проверяем каждые 2 секунды
+  }, 500); // Проверяем каждые 0.5 секунды
 }
 
 function stopConnectionCheck() {
@@ -114,28 +112,23 @@ function connectWebSocket() {
           window.electronAPI.updateTrayIcon(isOnline && dataChannel?.readyState === 'open');
         }
 
-        // Улучшенная логика создания P2P соединения
-        const needNewPeerConnection = isOnline && shouldInitiate && readyToConnect && 
-          (!pc || !dataChannel || dataChannel.readyState !== 'open');
-        
-        if (needNewPeerConnection) {
-          console.log('[App] Создаю/пересоздаю P2P как инициатор');
-          // Закрываем старое соединение если есть
-          if (pc) {
-            pc.close();
-            pc = null;
-            dataChannel = null;
-          }
-          // Небольшая задержка для стабильности
-          setTimeout(() => {
+        // Мгновенная логика создания P2P соединения
+        if (isOnline && shouldInitiate && readyToConnect) {
+          const needNewPeerConnection = !pc || !dataChannel || dataChannel.readyState !== 'open';
+          
+          if (needNewPeerConnection) {
+            console.log('[App] МГНОВЕННО создаю P2P как инициатор');
+            // Закрываем старое соединение если есть
+            if (pc) {
+              pc.close();
+              pc = null;
+              dataChannel = null;
+            }
+            // Мгновенное создание соединения
             createPeerConnection(true);
-          }, 100);
-          // Запускаем периодическую проверку
-          startConnectionCheck();
-        } else if (isOnline && !shouldInitiate && readyToConnect && 
-                   (!pc || !dataChannel || dataChannel.readyState !== 'open')) {
-          console.log('[App] Готов принимать P2P соединение');
-          // Клиент готов принимать соединение
+            // Запускаем периодическую проверку
+            startConnectionCheck();
+          }
         } else if (!isOnline) {
           // Если не онлайн, останавливаем проверку
           stopConnectionCheck();
@@ -383,9 +376,7 @@ document.addEventListener('visibilitychange', () => {
         // Пересоздаем P2P если мы инициатор и оба онлайн
         if (isOnline && shouldInitiate) {
           console.log('[App] Пересоздаем P2P соединение...');
-          setTimeout(() => {
-            createPeerConnection(true);
-          }, 500);
+          createPeerConnection(true);
           // Запускаем периодическую проверку
           startConnectionCheck();
         } else {

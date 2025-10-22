@@ -57,11 +57,9 @@ function startConnectionCheck() {
         pc = null;
         dataChannel = null;
       }
-      setTimeout(() => {
-        createPeerConnection(true);
-      }, 100);
+      createPeerConnection(true);
     }
-  }, 2000); // Проверяем каждые 2 секунды
+  }, 500); // Проверяем каждые 0.5 секунды
 }
 
 function stopConnectionCheck() {
@@ -152,28 +150,23 @@ function connectWebSocket() {
         });
         updateUI();
 
-        // Улучшенная логика создания P2P соединения
-        const needNewPeerConnection = isOnline && shouldInitiate && readyToConnect && 
-          (!pc || !dataChannel || dataChannel.readyState !== 'open');
-        
-        if (needNewPeerConnection) {
-          console.log('[PWA] Создаю/пересоздаю P2P как инициатор');
-          // Закрываем старое соединение если есть
-          if (pc) {
-            pc.close();
-            pc = null;
-            dataChannel = null;
-          }
-          // Небольшая задержка для стабильности
-          setTimeout(() => {
+        // Мгновенная логика создания P2P соединения
+        if (isOnline && shouldInitiate && readyToConnect) {
+          const needNewPeerConnection = !pc || !dataChannel || dataChannel.readyState !== 'open';
+          
+          if (needNewPeerConnection) {
+            console.log('[PWA] МГНОВЕННО создаю P2P как инициатор');
+            // Закрываем старое соединение если есть
+            if (pc) {
+              pc.close();
+              pc = null;
+              dataChannel = null;
+            }
+            // Мгновенное создание соединения
             createPeerConnection(true);
-          }, 100);
-          // Запускаем периодическую проверку
-          startConnectionCheck();
-        } else if (isOnline && !shouldInitiate && readyToConnect && 
-                   (!pc || !dataChannel || dataChannel.readyState !== 'open')) {
-          console.log('[PWA] Готов принимать P2P соединение');
-          // Клиент готов принимать соединение
+            // Запускаем периодическую проверку
+            startConnectionCheck();
+          }
         } else if (!isOnline) {
           // Если не онлайн, останавливаем проверку
           stopConnectionCheck();
@@ -268,22 +261,18 @@ function createPeerConnection(isInitiator) {
     };
   }
 
-  // Создаем offer если это инициатор
+  // Создаем offer если это инициатор - мгновенно
   if (isInitiator) {
-    setTimeout(async () => {
-      try {
-        console.log('[PWA] Создаю offer...');
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
+    pc.createOffer()
+      .then(offer => pc.setLocalDescription(offer))
+      .then(() => {
         console.log('[PWA] Offer создан и отправлен');
         ws.send(JSON.stringify({
           type: 'offer',
           offer: pc.localDescription
         }));
-      } catch (error) {
-        console.error('[PWA] Ошибка создания offer:', error);
-      }
-    }, 1000);
+      })
+      .catch(error => console.error('[PWA] Ошибка создания offer:', error));
   }
 }
 
@@ -482,9 +471,7 @@ document.addEventListener('visibilitychange', () => {
         // Пересоздаем P2P если мы инициатор и оба онлайн
         if (isOnline && shouldInitiate) {
           console.log('[PWA] Пересоздаем P2P соединение...');
-          setTimeout(() => {
-            createPeerConnection(true);
-          }, 500);
+          createPeerConnection(true);
           // Запускаем периодическую проверку
           startConnectionCheck();
         }
